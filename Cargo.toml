@@ -3,6 +3,13 @@ name = "my_vec_rust"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name="my_vec_rust"
+path="src/main.rs"
+
+[lib]
+name = "custom_vec"
+path = "src/lib/lib.rs"
+crate-type=["lib"]
 
 [dependencies]
