@@ -1,4 +1,5 @@
-use std::{ptr::NonNull, marker::PhantomData, mem, alloc::{self, Layout}};
+use std::{ptr::{NonNull, self}, marker::PhantomData, mem, alloc::{self, Layout}};
+use std::ops::{Deref, DerefMut};
 
 pub struct  Vec<T> {
    ptr: NonNull<T>,
@@ -16,7 +17,7 @@ impl<T> Vec<T> {
       Vec { ptr: NonNull::dangling(), cap: 0, len: 0, _marker: PhantomData }
    }
 
-    fn grow(&mut self) {
+   fn grow(&mut self) {
       let (new_cap, new_layout) = if self.cap == 0 {
          (1, Layout::array::<T>(1).unwrap())
       } else {
@@ -46,5 +47,84 @@ impl<T> Vec<T> {
          Some(p) => p,
          None => alloc::handle_alloc_error(new_layout),
       };
+   }
+
+   pub fn push(&mut self, elem: T) {
+      if self.len == self.cap { self.grow(); }
+      unsafe {
+         ptr::write(self.ptr.as_ptr().add(self.len), elem);
+      }
+      self.len += 1; 
+   }
+
+   pub fn pop(&mut self) -> Option<T> {
+      if self.len == 0 {
+          None
+      } else {
+          self.len -= 1;
+          unsafe {
+              Some(ptr::read(self.ptr.as_ptr().add(self.len)))
+          }
+      }
+   }
+
+   pub fn insert(&mut self, index: usize, elem: T) {
+      // Note: `<=` because it's valid to insert after everything
+      // which would be equivalent to push.
+      assert!(index <= self.len, "index out of bounds");
+      if self.cap == self.len { self.grow(); }
+  
+      unsafe {
+         // ptr::copy(src, dest, len): "copy from src to dest len elems"
+         ptr::copy(self.ptr.as_ptr().add(index),
+                  self.ptr.as_ptr().add(index + 1),
+                  self.len - index);
+         ptr::write(self.ptr.as_ptr().add(index), elem);
+         self.len += 1;
+      }
+   }
+
+   pub fn remove(&mut self, index: usize) -> T {
+      // Note: `<` because it's *not* valid to remove after everything
+      assert!(index < self.len, "index out of bounds");
+      unsafe {
+         self.len -= 1;
+         let result = ptr::read(self.ptr.as_ptr().add(index));
+         ptr::copy(self.ptr.as_ptr().add(index + 1),
+                  self.ptr.as_ptr().add(index),
+                  self.len - index);
+         result
+      }
+   }
+}
+
+impl<T> Drop for Vec<T> {
+   fn drop(&mut self) {
+       if self.cap != 0 {
+           while let Some(_) = self.pop() { }
+           let layout = Layout::array::<T>(self.cap).unwrap();
+           unsafe {
+               alloc::dealloc(self.ptr.as_ptr() as *mut u8, layout);
+           }
+       }
+   }
+}
+
+impl<T> Deref for Vec<T> {
+    type Target = [T];
+    fn deref(&self) -> &[T] {
+        unsafe {
+            std::slice::from_raw_parts(self.ptr.as_ptr(), self.len)
+        }
     }
 }
+
+impl<T> DerefMut for Vec<T> {
+    fn deref_mut(&mut self) -> &mut [T] {
+        unsafe {
+            std::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len)
+        }
+    }
+}
+
+
