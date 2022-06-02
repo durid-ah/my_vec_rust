@@ -1,13 +1,12 @@
-use std::{marker::PhantomData, mem};
-use std::ptr::{NonNull, self};
+use std::{mem, ptr};
 use std::alloc::{self, Layout};
 
+use crate::raw_vec::RawVec;
+
 pub struct IntoIter<T> {
-   pub buf: NonNull<T>,
-   pub cap: usize,
-   pub start: *const T,
-   pub end: *const T,
-   pub _marker: PhantomData<T>,
+   pub(super) _buf: RawVec<T>, // we don't actually care about this. Just need it to live.
+   pub(super) start: *const T,
+   pub(super) end: *const T,
 }
 
 impl<T> Iterator for IntoIter<T> {
@@ -46,14 +45,9 @@ impl<T> DoubleEndedIterator for IntoIter<T> {
 
 impl<T> Drop for IntoIter<T> {
    fn drop(&mut self) {
-       if self.cap != 0 {
-           // drop any remaining elements
-           for _ in &mut *self {}
-           let layout = Layout::array::<T>(self.cap).unwrap();
-           unsafe {
-               alloc::dealloc(self.buf.as_ptr() as *mut u8, layout);
-           }
-       }
+       // only need to ensure all our elements are read;
+       // buffer will clean itself up afterwards.
+       for _ in &mut *self {}
    }
 }
 
